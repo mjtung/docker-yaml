@@ -1,0 +1,72 @@
+version: '3.7'
+services:
+  locator-web:
+    build:
+      context: ./flask-api
+      dockerfile: Dockerfile
+    image: mjtungarp/short-locator-web
+    restart: always
+    ports:
+     - "5001:5001"
+    depends_on:
+      - redis
+    healthcheck:
+      test: curl -f http://localhost:5001/health || exit 1
+      interval: 1m30s
+      timeout: 10s
+      retries: 2
+      start_period: 30s
+    networks:
+      - trading-network
+  locator-worker:
+    build:
+      context: ./locatortask
+      dockerfile: Dockerfile
+    image: mjtungarp/short-locator-worker
+    volumes:
+      - ${VOLUMEMOUNT}:${DOWNLOADPATH}
+    depends_on:
+      - redis
+    environment:
+      - SEBHOSTNAME
+      - SEBUSERNAMEUP
+      - SEBPASSWORDUP
+      - SEBUSERNAMEDOWN
+      - SEBPASSWORDDOWN
+      - KEYFILEUP
+      - KEYFILEDOWN
+      - DOWNLOADPATH
+      - UPLOAD_ONLY
+      - NUM_RETRIES
+      - WAIT_SECONDS
+      - EMAIL_HOST
+      - EMAIL_USERNAME
+      - EMAIL_PASSWORD
+      - EMAIL_PORT
+      - EMAIL_RECIPIENTS
+      - EZE_API_URL    
+    networks:
+      - trading-network
+  monitor:
+    build:
+      context: ./locatortask
+      dockerfile: Dockerfile
+    image: mjtungarp/short-locator-worker
+    ports:
+     - "5555:5555"
+    entrypoint: flower
+    command:  -A locator --port=5555 --broker=redis://redis:6379/0
+    depends_on:
+      - redis
+      - locator-worker
+    networks:
+      - trading-network
+  redis:
+    image: redis
+    networks:
+      - trading-network
+# volumes:
+#   filesvolume:
+networks:
+  trading-network:
+    external: true
